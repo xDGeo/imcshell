@@ -1,3 +1,4 @@
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -59,9 +60,34 @@ void execute_command(char *input) {
 
     // Built-in command: "globalusage"
     if (strcmp(args[0], "globalusage") == 0) {
-        printf("IMCSH Version 1.1 created by George and Mihai\n");
-        return;
+    int fd = -1, saved_stdout = -1;
+
+    if (redirect && outfile) {
+        fd = open(outfile, O_WRONLY | O_CREAT | O_APPEND, 0644);
+        if (fd < 0) {
+            perror("open");
+            return;
+        }
+        
+        // Save the original stdout file descriptor
+        saved_stdout = dup(STDOUT_FILENO);
+        
+        // Redirect stdout to file
+        dup2(fd, STDOUT_FILENO);
+        close(fd);
     }
+
+    printf("IMCSH Version 1.1 created by George and Mihai\n");
+
+    if (redirect && saved_stdout != -1) {
+        // Restore the original stdout
+        dup2(saved_stdout, STDOUT_FILENO);
+        close(saved_stdout);
+    }
+
+    fflush(stdout);  // Ensure output is written
+    return;
+}
 
     // Create a child process to execute the command
     pid_t pid = fork();
@@ -105,7 +131,7 @@ void execute_command(char *input) {
  * - If background processes exist, prompts the user before quitting.
  * - Terminates all background processes if the user confirms.
  */
-void quit_shell() {
+void quit_shell(void) {
     if (bg_count > 0) {
         printf("The following background processes are still running:\n");
         for (int i = 0; i < bg_count; i++) {
@@ -129,7 +155,7 @@ void quit_shell() {
     }
 }
 
-int main() {
+int main(void) {
     char input[MAX_INPUT];
 
     while (1) {
